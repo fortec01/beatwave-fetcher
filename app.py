@@ -8,6 +8,7 @@ Endpoints (all require ?k=<FETCH_KEY> when FETCH_KEY is set):
   GET /play?title=&artist=&duration=    -> 302 to /stream?id=...
 """
 import os
+import socket
 import time
 import threading
 
@@ -18,6 +19,29 @@ import yt_dlp
 
 app = Flask(__name__)
 KEY = os.environ.get("FETCH_KEY", "")
+
+# Cloudflare WARP egress (wireproxy, started by start.sh): YouTube flags
+# this host's own datacenter IPs, so extraction + streaming go through the
+# local SOCKS5 proxy when it is up.
+PROXY = os.environ.get("YT_PROXY", "socks5h://127.0.0.1:1080")
+_proxy_state = {"checked": False, "on": False}
+
+
+def proxy_on():
+    if not _proxy_state["checked"]:
+        try:
+            s = socket.socket()
+            s.settimeout(1)
+            _proxy_state["on"] = s.connect_ex(("127.0.0.1", 1080)) == 0
+            s.close()
+        except OSError:
+            _proxy_state["on"] = False
+        _proxy_state["checked"] = True
+    return _proxy_state["on"]
+
+
+def req_proxies():
+    return {"http": PROXY, "https": PROXY} if proxy_on() else None
 
 _cache = {}          # videoId -> (expires, stream_url, content_type)
 _cache_lock = threading.Lock()
@@ -41,6 +65,8 @@ def ydl_opts(**extra):
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
     }
+    if proxy_on():
+        opts["proxy"] = PROXY
     opts.update(extra)
     return opts
 
@@ -182,7 +208,8 @@ def stream_ep():
     range_hdr = request.headers.get("Range")
     if range_hdr:
         headers["Range"] = range_hdr
-    upstream = requests.get(stream_url, headers=headers, stream=True, timeout=30)
+    upstream = requests.get(stream_url, headers=headers, stream=True, timeout=30,
+                            proxies=req_proxies())
 
     resp_headers = {
         "Content-Type": ctype,
