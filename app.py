@@ -35,9 +35,24 @@ def ydl_opts(**extra):
         "no_warnings": True,
         "noplaylist": True,
         "socket_timeout": 20,
+        # PO-token support: the bgutil plugin (installed via pip) mints a
+        # per-video proof-of-origin token using Node; needed to get past
+        # YouTube's bot wall from datacenter IPs.
+        "js_runtimes": {"node": {}},
+        "remote_components": ["ejs:github"],
     }
     opts.update(extra)
     return opts
+
+
+# Client strategies, best first. The first pairs the PO-token plugin with the
+# clients the yt-dlp community currently finds working from cloud IPs.
+CLIENT_STRATEGIES = [
+    ["web", "android_vr", "tv_downgraded"],
+    ["android_vr"],
+    ["android", "ios"],
+    None,
+]
 
 
 def score_candidate(cand, want_dur):
@@ -54,10 +69,10 @@ def resolve(title, artist, want_dur):
     query = f"{title} {artist}".strip()
     search = f"ytsearch5:{query}"
     last_err = None
-    for client in (None, "android", "ios"):
+    for clients in CLIENT_STRATEGIES:
         extra = {}
-        if client:
-            extra["extractor_args"] = {"youtube": {"player_client": [client]}}
+        if clients:
+            extra["extractor_args"] = {"youtube": {"player_client": clients}}
         try:
             with yt_dlp.YoutubeDL(ydl_opts(**extra)) as ydl:
                 info = ydl.extract_info(search, download=False)
@@ -89,10 +104,10 @@ def get_stream_url(video_id):
             return hit[1], hit[2]
     url = f"https://www.youtube.com/watch?v={video_id}"
     last_err = None
-    for client in (None, "android", "ios"):
+    for clients in CLIENT_STRATEGIES:
         extra = {"format": "bestaudio/best"}
-        if client:
-            extra["extractor_args"] = {"youtube": {"player_client": [client]}}
+        if clients:
+            extra["extractor_args"] = {"youtube": {"player_client": clients}}
         try:
             with yt_dlp.YoutubeDL(ydl_opts(**extra)) as ydl:
                 info = ydl.extract_info(url, download=False)
