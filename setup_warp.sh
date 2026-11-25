@@ -1,9 +1,8 @@
 #!/bin/sh
-# Download the WARP tooling (wgcf + wireproxy) into $HOME/warp/bin.
-# wgcf registers a free Cloudflare WARP account; wireproxy turns the
-# WireGuard profile into a local SOCKS5 proxy with no root/TUN needed.
+# Download the WARP tooling (wgcf + wireproxy) INSIDE the project dir
+# (vendor/bin) so it survives into the Render runtime.
 set -e
-BIN="$HOME/warp/bin"
+BIN="vendor/bin"
 mkdir -p "$BIN"
 if [ ! -x "$BIN/wgcf" ]; then
   curl -fsSL -o "$BIN/wgcf" \
@@ -13,8 +12,8 @@ fi
 if [ ! -x "$BIN/wireproxy" ]; then
   curl -fsSL -o /tmp/wireproxy.tar.gz \
     https://github.com/windtf/wireproxy/releases/download/v1.1.3/wireproxy_linux_amd64.tar.gz
-  tar -xzf /tmp/wireproxy.tar.gz -C "$BIN"
+  tar -xzf /tmp/wireproxy.tar.gz -C "$BIN" --no-same-owner
   chmod +x "$BIN/wireproxy"
   rm -f /tmp/wireproxy.tar.gz
 fi
-echo "warp tooling ready: $($BIN/wgcf --version 2>/dev/null | head -1)"
+echo "warp tooling ready in $BIN"

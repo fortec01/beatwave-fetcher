@@ -80,6 +80,22 @@ CLIENT_STRATEGIES = [
     None,
 ]
 
+# The bgutil token script lives inside the project dir (built by
+# setup_pot.sh); point the plugin at it explicitly instead of relying on
+# its $HOME default, which Render does not carry into the runtime.
+POT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "vendor", "bgutil", "server", "build",
+                          "generate_once.js")
+
+
+def strategy_extra(clients, **base):
+    extra = dict(base)
+    ea = {"youtubepot-bgutilscript": {"script_path": [POT_SCRIPT]}}
+    if clients:
+        ea["youtube"] = {"player_client": clients}
+    extra["extractor_args"] = ea
+    return extra
+
 
 def score_candidate(cand, want_dur):
     dur = cand.get("duration") or 0
@@ -96,9 +112,7 @@ def resolve(title, artist, want_dur):
     search = f"ytsearch5:{query}"
     last_err = None
     for clients in CLIENT_STRATEGIES:
-        extra = {}
-        if clients:
-            extra["extractor_args"] = {"youtube": {"player_client": clients}}
+        extra = strategy_extra(clients)
         try:
             with yt_dlp.YoutubeDL(ydl_opts(**extra)) as ydl:
                 info = ydl.extract_info(search, download=False)
@@ -131,9 +145,7 @@ def get_stream_url(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
     last_err = None
     for clients in CLIENT_STRATEGIES:
-        extra = {"format": "bestaudio/best"}
-        if clients:
-            extra["extractor_args"] = {"youtube": {"player_client": clients}}
+        extra = strategy_extra(clients, format="bestaudio/best")
         try:
             with yt_dlp.YoutubeDL(ydl_opts(**extra)) as ydl:
                 info = ydl.extract_info(url, download=False)
